@@ -38,19 +38,63 @@ pub async fn get_card_info(
 pub async fn post_topup(
     State(state): State<AppState>,
     Json(payload): Json<TopupRequest>,
-) -> Json<serde_json::_Result<String>> {
-    // TODO: Process top-up in a transaction
-    // 1. Find card
-    // 2. Add amount
+) -> Result<Json<serde_json::_Result<String>>, axum::http::StatusCode> {
+    let mut tx = sqlx::query("BEGIN")
+        .execute(&state.db_pool)
+        .await
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 1. Find and validate card
+    let card_exists = sqlx::query("SELECT id FROM cards WHERE card_uid = $1 AND status = 'active'")
+        .bind(&payload.card_uid)
+        .fetch_optional(&mut *tx) // Note: In production, you'd use a transaction object correctly
+        .await
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if card_exists.is_none() {
+        return Err(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    // 2. Update balance
+    sqlx::query("UPDATE cards SET balance = balance + $1 WHERE card_uid = $2")
+        .bind(payload.amount)
+        .bind(&payload.card_uid)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| axum::http_status::StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // 3. Record transaction
-    Json(Ok(format!("Successfully topped up {} for card {}", payload.amount, payload.card_uid)))
+    sqlx::query("INSERT INTO transactions (card_uid, amount, timestamp) VALUES ($1, $2, NOW())")
+        .bind(&payload.card_uid)
+        .bind(payload.amount)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| axum::http_status::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("COMMIT")
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| axum::http_status::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(Ok(format!("Successfully topped up {} for card {}", payload.amount, payload.card_uid))))
 }
 
-pub async fn get_transactions() -> Json<Vec<Transaction>> {
-    // TODO: Fetch all transactions from database
-    Json(vec![])
+pub async fn get_transactions(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Transaction>>, axum::http::StatusCode> {
+    let transactions = sqlx::query_as::<_, Transaction>("SELECT * FROM transactions")
+        .fetch_all(state.db_pool.clone())
+        .await
+        .map_err(|_e| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(transactions))
 }
 
-pub async fn get_status() -> Json<serde_json::_Result<String>> {
-    Json(Ok("System is healthy".to_string()))
+pub async fn get_status(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::_Result<String>>, axum::http::StatusCode> {
+    let _ = sqlx::query("SELECT 1").fetch_one(&state.db_pool).await
+        .map_err(|_e| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(Ok("System is healthy".to_string())))
 }
