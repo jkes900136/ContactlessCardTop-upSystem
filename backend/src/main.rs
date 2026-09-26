@@ -8,6 +8,11 @@ mod handlers;
 mod models;
 mod routes;
 
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: db::DbPool,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration
@@ -15,11 +20,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Setup database connection pool
     let pool = db::init_db_pool(&config.database_url).await?;
+    let shared_state = AppState { db_pool: pool };
 
     // Build router
     let app = Router::new()
         .nest("/api", routes::api_routes())
-        .layer(TraceLayer::new___()); // Note: Simplified for initial structure
+        .with_state(shared_state)
+        .layer(TraceLayer::new()); // Note: Simplified for initial structure
 
     let addr = SocketAddr::from_str(&config.server_addr).unwrap();
     println!("Server running on {}", addr);
