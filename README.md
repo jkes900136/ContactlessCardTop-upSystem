@@ -6,7 +6,7 @@
 ## 2. 核心架構設計
 系統採用前後端分離架構，並包含一個硬體互動層。
 
-*   **前端 (Front-end):** 基於 **Vue.js**，負責提供操作介面。
+*   **前端 (Front-end):** 基於 **Leptos**，負責提供操作介面。
 *   **後端 (Back-end):** 使用 **Rust** 配備 **Axum** 框架，負責處理業務邏輯、API 路由、資料庫操作與多執行緒同步。
 *   **硬體介面層 (Hardware/Middleware):** 透過序列埠 (Serial Port/USB) 或專用協議與 RFID 讀取器通訊，將硬體訊號轉換為後端可處理的數據。
 
@@ -19,10 +19,9 @@
 - **配置管理:** Config-rs 或 Env_vars
 
 ### 前端 (Frontend)
-- **框架:** Vue.js (建議 Vue 3 + Vite)
-- **狀態管理:** Pinia
+- **框架:** Leptos (Rust-based web framework)
 - **樣式:** Tailwind CSS (快速構建 UI)
-- **通訊:** Axios 或 Fetch API
+- **通訊:** reqwest 或 web_sys (搭配 Rust WebAssembly)
 
 ### 資料庫 (Database)
 - **選擇:** PostgreSQL (生產環境) 或 SQLite (開發/輕量需求)
